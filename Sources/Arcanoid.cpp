@@ -105,7 +105,8 @@ entt::entity Arcanoid::spawn_laser(entt::registry* registry, entt::entity platfo
 	entt::entity entity = registry->create();
 	registry->emplace<Rect>(entity, position, dimensions);
 	registry->emplace<Sprite>(entity, laser_texture);
-	registry->emplace<Laser>(entity, platform_entity);
+	registry->emplace<Laser>(entity);
+	registry->emplace<Attach>(entity, platform_entity, Vector2{ 0.0f, -g_game_area_s.y / 2 });
 	return entity;
 }
 
@@ -115,11 +116,23 @@ void Arcanoid::spawn_random_pickup()
 	m_scheduler->schedule(5, std::bind(&Arcanoid::spawn_random_pickup, this));
 }
 
-void Arcanoid::reset_to_start()
+void Arcanoid::reset_to_start(bool full)
 {
-	remove_balls(m_registry);
-	remove_pickups(m_registry);
+	is_waiting_for_next_level = false;
+	is_waiting_for_restart    = false;
+	is_restart_allowed        = false;
+	is_restart_requested      = false;
 
+	if (full)
+	{
+		m_registry->clear();
+	}
+	else
+	{
+		remove_balls(m_registry);
+		remove_pickups(m_registry);
+	}
+	
 	m_scheduler->reset();
 	m_scheduler->schedule(5, std::bind(&Arcanoid::spawn_random_pickup, this));
 
@@ -152,29 +165,32 @@ void Arcanoid::check_win_conditions()
 		if (m_player_state.lives >= 0)
 		{
 			// Consume life and spawn a new ball
-			reset_to_start();
+			reset_to_start(false);
 		}
 		else
 		{
+			is_waiting_for_restart    = true;
+			is_waiting_for_next_level = true;
 			m_state = EGameState::score;
 		}
 	}
 
 	if (m_registry->size<Block>() == 0)
 	{
+		is_waiting_for_next_level = true;
 		m_state = EGameState::score;
 	}
 }
 
-bool Arcanoid::is_waiting_for_next_level()
-{
-	return m_state == EGameState::score && m_player_state.lives > 0;
-}
-
 bool Arcanoid::progress_to_next_level()
 {
-	reset_to_start();
-	return false;
+	reset_to_start(true);
+	return true;
+}
+
+void Arcanoid::reset_player_state()
+{
+	m_player_state = {};
 }
 
 void Arcanoid::on_construct(SDL_Renderer* renderer, entt::registry* registry)
@@ -194,8 +210,7 @@ void Arcanoid::on_construct(SDL_Renderer* renderer, entt::registry* registry)
 		"Resources/images/soft_block_yellow.png",
 	};
 
-	constexpr std::string_view hblock_paths[EBLOCKCOLOR_NUMBER] {
-		"Resources/images/hard_block.png",
+	constexpr std::string_view crack_paths[ECRACKCOLOR_NUMBER] {
 		"Resources/images/hard_block_cr1.png",
 		"Resources/images/hard_block_cr2.png"
 	};
@@ -204,6 +219,12 @@ void Arcanoid::on_construct(SDL_Renderer* renderer, entt::registry* registry)
 	{
 		const std::string path{ base_path + block_paths[i].data() };
 		m_block_texture[i] = IMG_LoadTexture(renderer, path.c_str());
+	}
+
+	for (size_t i = 0; i < ECRACKCOLOR_NUMBER; ++i)
+	{
+		const std::string path{ base_path + crack_paths[i].data() };
+		m_crack_texture[i] = IMG_LoadTexture(renderer, path.c_str());
 	}
 
 	m_font = TTF_OpenFont("Resources/fonts/Roboto-Regular.ttf", 12);
@@ -229,7 +250,7 @@ void Arcanoid::on_construct(SDL_Renderer* renderer, entt::registry* registry)
 	}
 
 	// Start game
-	reset_to_start();
+	reset_to_start(true);
 }
 
 void Arcanoid::on_update(float delta_time)
@@ -243,11 +264,12 @@ void Arcanoid::on_fixed_update()
 	m_scheduler->pause(m_state != EGameState::game);
 	if (m_state == EGameState::game)
 	{
-		update_balls(m_registry, m_platform);
+		update_balls(m_registry, m_platform, m_crack_texture);
 		update_laser(m_registry);
 		update_lifes(m_registry, m_player_state);
 		update_pickups(m_registry, m_scheduler, m_platform, m_laser_texture);
 		update_movable(m_registry);
+		update_attach(m_registry);
 		update_destroys(m_registry);
 
 		check_win_conditions();
@@ -309,16 +331,18 @@ void Arcanoid::on_input(EInputEvent e, bool changed)
 	{
 		Rect& platform = m_registry->get<Rect>(m_platform);
 
-		constexpr float platform_velocity = g_platform_velocity * g_fixed_delta_time;
+		constexpr float platform_velocity = g_platform_velocity * (float) g_fixed_delta_time;
 		const Bounds plbounds = fmath::rect_to_bounds(platform);
 		const Bounds gabounds = fmath::rect_to_bounds(m_game_area);
+		const float left_border  = gabounds.min.x + platform.dimensions.x / 2;
+		const float right_border = gabounds.max.x - platform.dimensions.x / 2;
 		switch (e)
 		{
 		case EInputEvent::left:
-			platform.position.x = plbounds.min.x - platform_velocity > gabounds.min.x ? platform.position.x - platform_velocity : gabounds.min.x + platform.dimensions.x / 2;
+			platform.position.x = fmath::clamp(platform.position.x - platform_velocity, left_border, right_border);
 			break;
 		case EInputEvent::right:
-			platform.position.x = plbounds.max.x + platform_velocity < gabounds.max.x ? platform.position.x + platform_velocity : gabounds.max.x - platform.dimensions.x / 2;
+			platform.position.x = fmath::clamp(platform.position.x + platform_velocity, left_border, right_border);
 			break;
 		case EInputEvent::space:
 			break;
@@ -337,6 +361,46 @@ void Arcanoid::on_input(EInputEvent e, bool changed)
 			m_state = EGameState::game;
 		}
 	}
+	else if (m_state == EGameState::score)
+	{
+		if (e == EInputEvent::space && changed && is_restart_allowed)
+		{
+			reset_player_state();
+			is_restart_requested = true;
+		}
+	}
+}
+
+Vector2 Arcanoid::get_entity_position(entt::registry* registry, entt::entity entity)
+{
+	// We have 2 types of dimensions, one for Circle and other for Rect
+	Vector2 position{ NAN, NAN };
+	if (Rect* rect = registry->try_get<Rect>(entity))
+	{
+		position = rect->position;
+	}
+	else if (Circle* circle = registry->try_get<Circle>(entity))
+	{
+		position = fmath::circle_to_rect(*circle).position;
+	}
+
+	return position;
+}
+
+bool Arcanoid::set_entity_position(entt::registry* registry, entt::entity entity, Vector2 position)
+{
+	if (Rect* rect = registry->try_get<Rect>(entity))
+	{
+		rect->position = position;
+		return true;
+	}
+	else if (Circle* circle = registry->try_get<Circle>(entity))
+	{
+		circle->position = position;
+		return true;
+	}
+
+	return false;
 }
 
 Arcanoid::Arcanoid(std::shared_ptr<Scheduler> scheduler) : m_scheduler(scheduler)
@@ -365,13 +429,13 @@ void Arcanoid::remove_pickups(entt::registry* registry)
 	}
 
 	auto laser_view = registry->view<Laser>();
-	for (auto [entity, laser] : laser_view.each())
+	for (auto [entity] : laser_view.each())
 	{
 		registry->destroy(entity);
 	}
 }
 
-void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_entity)
+void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_entity, std::array<SDL_Texture*, ECRACKCOLOR_NUMBER>& crtextures)
 {
 	Rect platform{};
 	if (registry->has<Rect>(platform_entity))
@@ -446,6 +510,14 @@ void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_enti
 				ball_mov.velocity.y *= -1;
 			}
 
+			// Random generators for cracks
+			if (Sprite* sprite = registry->try_get<Sprite>(entity))
+			{
+				static std::default_random_engine gen(SDL_GetTicks());
+				static std::uniform_int_distribution<int> index(0, ECRACKCOLOR_NUMBER - 1);
+				sprite->texture = crtextures[index(gen)];
+			}
+			
 			// One hit is 1 HP
 			block_life.life -= 1;
 			break;
@@ -502,16 +574,6 @@ void Arcanoid::update_pickups(entt::registry* registry, std::shared_ptr<Schedule
 					}
 				});
 				break;
-			case EPickupType::platform_shrink:
-				platform.dimensions = { platform.dimensions.x + 5, platform.dimensions.y };
-				scheduler->schedule(5, [registry, platform_entity]() {
-					if (registry->valid(platform_entity))
-					{
-						Rect& platform = registry->get<Rect>(platform_entity);
-						platform.dimensions = { platform.dimensions.x - 5, platform.dimensions.y };
-					}
-				});
-				break;
 			case EPickupType::triplet:
 				{
 					auto ball_view = registry->view<Ball, Circle, Sprite, Movable>();
@@ -527,7 +589,7 @@ void Arcanoid::update_pickups(entt::registry* registry, std::shared_ptr<Schedule
 			case EPickupType::laser:
 				{
 					entt::entity laser_entity = spawn_laser(registry, platform_entity, laser_texture);
-					scheduler->schedule(5, [registry, laser_entity]() {
+					scheduler->schedule(3, [registry, laser_entity]() {
 						if (registry->valid(laser_entity))
 						{
 							registry->destroy(laser_entity);
@@ -553,29 +615,20 @@ void Arcanoid::update_destroys(entt::registry* registry)
 
 void Arcanoid::update_movable(entt::registry* registry)
 {
-	// If I had more primitives, I would've moved position into separate component
-	auto rect_view = registry->view<Rect, Movable>();
-	for (auto [entity, rect, mov] : rect_view.each())
+	auto circle_view = registry->view<Movable>();
+	for (auto [entity, mov] : circle_view.each())
 	{
-		rect.position = rect.position + mov.velocity * (float)g_fixed_delta_time;
-	}
-	auto circle_view = registry->view<Circle, Movable>();
-	for (auto [entity, ball, mov] : circle_view.each())
-	{
-		ball.position = ball.position + mov.velocity * (float)g_fixed_delta_time;
+		const Vector2 old_position{ get_entity_position(registry, entity) };
+		const Vector2 new_position{ old_position + mov.velocity * (float)g_fixed_delta_time };
+		set_entity_position(registry, entity, new_position);
 	}
 }
 
 void Arcanoid::update_laser(entt::registry* registry)
 {
-	auto rect_view = registry->view<Rect, Laser>();
-	for (auto [entity, rect, laser] : rect_view.each())
+	auto rect_view = registry->view<Rect, Laser, Attach>();
+	for (auto [entity, rect, attach] : rect_view.each())
 	{
-		Rect& platform = registry->get<Rect>(laser.platform_entity);
-
-		const Vector2 position{ platform.position.x, platform.position.y - g_game_area_s.y / 2 };
-		rect.position = position;
-
 		auto block_view = registry->view<Block, Rect, Life, Collider>();
 		for (auto [entity, block, block_life] : block_view.each())
 		{
@@ -587,6 +640,22 @@ void Arcanoid::update_laser(entt::registry* registry)
 			block_life.life -= 5.0f * (float) g_fixed_delta_time;
 			continue;
 		}
+	}
+}
+
+void Arcanoid::update_attach(entt::registry* registry)
+{
+	auto rect_view = registry->view<Attach>();
+	for (auto [entity, attach] : rect_view.each())
+	{
+		if (!registry->valid(attach.parent)) 
+		{
+			registry->destroy(entity);
+			continue;
+		}
+
+		const Vector2 new_position{ get_entity_position(registry, attach.parent) + attach.offset };
+		set_entity_position(registry, entity, new_position);
 	}
 }
 
@@ -662,6 +731,11 @@ void Arcanoid::render_final_score(SDL_Renderer* renderer, TTF_Font* font, Player
 	else
 	{
 		render_text(renderer, font, g_game_center_s, { 0.5, 0.5f }, "!!!GAME OVER!!!");
+	}
+
+	if (is_restart_allowed)
+	{
+		render_text(renderer, font, { g_game_center_s.x, m_game_bounds.max.y }, { 0.5, 0.5f }, "Press Space to restart");
 	}
 }
 

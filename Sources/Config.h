@@ -14,10 +14,10 @@ constexpr Vector2 g_screen_area_s{ g_screen_area * g_scale };
 constexpr Vector2 g_game_area_s{ g_game_area * g_scale };
 constexpr Vector2 g_game_center_s{ g_game_center * g_scale };
 
-constexpr float   g_ball_start_velocity{ 320.0f * g_scale };
+constexpr float   g_ball_start_velocity{ 220.0f * g_scale };
 constexpr float   g_ball_radius{ 6.0f * g_scale };
 
-constexpr float   g_platform_velocity{ 720.0f * g_scale };
+constexpr float   g_platform_velocity{ 460.0f * g_scale };
 constexpr float   g_platform_elevation{ 10.0f * g_scale };
 constexpr Vector2 g_platform_dimensions{ 42.0f * g_scale, 10.0f * g_scale };
 

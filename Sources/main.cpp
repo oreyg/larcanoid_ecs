@@ -32,6 +32,9 @@ int main(int argc, char* argv[])
 	auto scheduler = engine.create_actor<Scheduler>();
 	auto arcanoid  = engine.create_actor<Arcanoid>(scheduler);
 
+	auto other_scheduler = engine.create_actor<Scheduler>();
+	other_scheduler->pause(false);
+
 	engine.call_construct();
 
 	level1(*arcanoid);
@@ -41,16 +44,35 @@ int main(int argc, char* argv[])
 	{
 		engine.process();
 
-		if (arcanoid->is_waiting_for_next_level())
+		if (arcanoid->is_waiting_for_restart)
 		{
+			next_level = ELEVEL_NUMBER;
+		}
+
+		if (arcanoid->is_waiting_for_next_level)
+		{
+
 			switch (next_level)
 			{
 			case ELEVEL2:
+				arcanoid->progress_to_next_level();
 				level2(*arcanoid);
-				arcanoid->reset_to_start();
 				next_level = ELEVEL_NUMBER;
 				break;
 			default:
+				arcanoid->is_restart_allowed = true;
+				if (arcanoid->is_restart_requested)
+				{
+					// Restart in 0.5 seconds 
+					arcanoid->is_restart_allowed = false;
+					arcanoid->is_waiting_for_next_level = false;
+					other_scheduler->schedule(0.5, [&]() {
+						arcanoid->is_waiting_for_next_level = true;
+						arcanoid->progress_to_next_level();
+						level1(*arcanoid);
+						next_level = ELEVEL2;
+					});
+				}
 				break;
 			}
 		}

@@ -37,11 +37,17 @@ enum EBlockColor
 	EBLOCKCOLOR_NUMBER
 };
 
+enum ECrackColor
+{
+	ECRACKCOLOR_1,
+	ECRACKCOLOR_2,
+	ECRACKCOLOR_NUMBER
+};
+
 enum class EPickupType
 {
 	triplet = 0,
 	platform_enlarge,
-	platform_shrink,
 	laser,
 	number
 };
@@ -74,16 +80,17 @@ struct Pickup
 	EPickupType type;
 };
 
-struct Laser
-{
-	entt::entity platform_entity;
-};
-
 struct Collider {};
 struct Block {};
 struct Platform {};
 struct Ball {};
 struct Destroy {};
+struct Laser {};
+struct Attach 
+{
+	entt::entity parent;
+	Vector2      offset;
+};
 
 class Arcanoid final : public Actor
 {
@@ -104,6 +111,7 @@ private:
 	// Resources
 	TTF_Font* m_font{ nullptr };
 	std::array<SDL_Texture*, EBLOCKCOLOR_NUMBER> m_block_texture{};
+	std::array<SDL_Texture*, ECRACKCOLOR_NUMBER> m_crack_texture{};
 
 	SDL_Texture* m_ball_texture{};
 	SDL_Texture* m_platform_texture{};
@@ -111,6 +119,11 @@ private:
 	SDL_Texture* m_pickup_texture{};
 
 public:
+	bool is_restart_allowed = false;
+	bool is_restart_requested = false;
+	bool is_waiting_for_next_level = false;
+	bool is_waiting_for_restart = false;
+
 	static void render_text(SDL_Renderer* renderer, TTF_Font* font, Vector2 offset, Vector2 anchor, const char* text);
 	void render_player_state(SDL_Renderer* renderer, TTF_Font* font, PlayerState& player_state);
 	void render_final_score(SDL_Renderer* renderer, TTF_Font* font, PlayerState& player_state);
@@ -119,17 +132,20 @@ public:
 	void spawn_block_grid(Vector2 offset, uint32_t cols, uint32_t rows, Vector2 block_dims, Vector2 block_offset, float HP);
 
 	void spawn_random_pickup();
-	void reset_to_start();
+	void reset_to_start(bool full);
 	void check_win_conditions();
 
-	bool is_waiting_for_next_level();
 	bool progress_to_next_level();
+	void reset_player_state();
 
 	virtual void on_construct(SDL_Renderer* renderer, entt::registry* registry) override;
 	virtual void on_update(float delta_time) override;
 	virtual void on_fixed_update() override;
 	virtual void on_render(SDL_Renderer* renderer) override;
 	virtual void on_input(EInputEvent e, bool changed) override;
+
+	static Vector2 get_entity_position(entt::registry* registry, entt::entity entity);
+	static bool    set_entity_position(entt::registry* registry, entt::entity entity, Vector2 position);
 
 	// Those functions could be moved into separate files, if you want to refactor it that way
 	static entt::entity spawn_platform(entt::registry* registry, SDL_Texture* platform_texture);
@@ -140,12 +156,13 @@ public:
 	static void remove_balls(entt::registry* registry);
 	static void remove_pickups(entt::registry* registry);
 
-	static void update_balls(entt::registry* registry, entt::entity platform_entity);
+	static void update_balls(entt::registry* registry, entt::entity platform_entity, std::array<SDL_Texture*, ECRACKCOLOR_NUMBER>& crtextures);
 	static void update_lifes(entt::registry* registry, PlayerState& player_state);
 	static void update_pickups(entt::registry* registry, std::shared_ptr<Scheduler> scheduler, entt::entity platform_entity, SDL_Texture* laser_texture);
 	static void update_destroys(entt::registry* registry);
 	static void update_movable(entt::registry* registry);
 	static void update_laser(entt::registry* registry);
+	static void update_attach(entt::registry* registry);
 
 	static void render_sprites(entt::registry* registry, SDL_Renderer* renderer);
 
