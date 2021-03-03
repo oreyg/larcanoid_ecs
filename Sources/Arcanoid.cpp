@@ -481,7 +481,7 @@ void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_enti
 		// We want to avoid right angle for our ball
 		if (fabs(direction.x) > 0.9 || fabs(direction.y) > 0.98)
 		{
-			ball_mov.velocity = fmath::rotated(ball_mov.velocity, 1 * fmath::conv_to_rad);
+			ball_mov.velocity = fmath::rotated(ball_mov.velocity, std::copysign(1.0f, direction.x) * fmath::conv_to_rad);
 		}
 
 		auto block_view = registry->view<Block, Rect, Life, Collider>();
@@ -493,11 +493,11 @@ void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_enti
 			}
 
 			Vector2 delta = ball.position - block.position;
-			if (fabsf(delta.y) < block.dimensions.y / 2)
+			if (fabsf(delta.y) < block.dimensions.y)
 			{
 				ball_mov.velocity.x *= -1;
 			}
-			else if (fabsf(delta.x) < block.dimensions.x / 2)
+			else if (fabsf(delta.x) < block.dimensions.x)
 			{
 				ball_mov.velocity.y *= -1;
 			}
