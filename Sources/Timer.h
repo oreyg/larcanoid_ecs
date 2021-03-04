@@ -22,13 +22,9 @@ public:
 	void pause(bool paused);
 	void reset();
 
-	// Inherited via Actor
-	virtual void on_construct(SDL_Renderer* renderer, entt::registry* registry) override;
 	virtual void on_update(float delta_time) override;
-	virtual void on_fixed_update() override;
-	virtual void on_render(SDL_Renderer* renderer) override;
-	virtual void on_input(EInputEvent evt, bool changed) override;
 
+	Scheduler(bool paused);
 	Scheduler();
 	virtual ~Scheduler();
 	Scheduler(Scheduler&) = delete;

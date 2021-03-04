@@ -28,8 +28,6 @@ void Arcanoid::spawn_block_grid(Vector2 offset, uint32_t cols, uint32_t rows, Ve
 	static std::default_random_engine gen(SDL_GetTicks());
 	static std::uniform_int_distribution<int> index(0, EBLOCKCOLOR_NUMBER - 1);
 
-	uint32_t width  = (uint32_t)(block_dims.x + block_offset.x) * cols;
-	uint32_t height = (uint32_t)(block_dims.y + block_offset.y) * rows;
 	for (uint32_t i = 0; i < rows; ++i)
 	{
 		for (uint32_t j = 0; j < cols; ++j)
@@ -325,6 +323,8 @@ void Arcanoid::on_input(EInputEvent e, bool changed)
 				m_state = EGameState::game;
 			}
 			break;
+		case EInputEvent::escape:
+			break;
 		}
 	}
 	else if (m_state == EGameState::game)
@@ -332,7 +332,7 @@ void Arcanoid::on_input(EInputEvent e, bool changed)
 		Rect& platform = m_registry->get<Rect>(m_platform);
 
 		constexpr float platform_velocity = g_platform_velocity * (float) g_fixed_delta_time;
-		const Bounds plbounds = fmath::rect_to_bounds(platform);
+		//const Bounds plbounds = fmath::rect_to_bounds(platform);
 		const Bounds gabounds = fmath::rect_to_bounds(m_game_area);
 		const float left_border  = gabounds.min.x + platform.dimensions.x / 2;
 		const float right_border = gabounds.max.x - platform.dimensions.x / 2;
@@ -596,6 +596,8 @@ void Arcanoid::update_pickups(entt::registry* registry, std::shared_ptr<Schedule
 						}
 					});
 				}
+				break;
+			case EPickupType::number:
 				break;
 			}
 

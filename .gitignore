@@ -1,3 +1,4 @@
 .vs/
+out/
 x64/
 *.vcxproj.user

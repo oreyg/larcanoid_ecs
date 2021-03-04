@@ -74,21 +74,21 @@ namespace fmath
 	template<class t>
 	constexpr t min(t x1, t x2)
 	{
-		static_assert(std::is_arithmetic_v<t>);
+		static_assert(std::is_arithmetic_v<t>, "fmath::max(x1, x2) expects arithmetic type");
 		return x1 < x2 ? x1 : x2;
 	}
 
 	template<class t>
 	constexpr t max(t x1, t x2)
 	{
-		static_assert(std::is_arithmetic_v<t>);
+		static_assert(std::is_arithmetic_v<t>, "fmath::max(x1, x2) expects arithmetic type");
 		return x1 > x2 ? x1 : x2;
 	}
 
 	template<class t>
 	constexpr t clamp(t x, t xmin, t xmax)
 	{
-		static_assert(std::is_arithmetic_v<t>);
+		static_assert(std::is_arithmetic_v<t>, "fmath::max(x1, x2) expects arithmetic type");
 		return min(max(x, xmin), xmax);
 	}
 
@@ -96,10 +96,10 @@ namespace fmath
 	{
 		const float half_width  = rect.dimensions.x / 2.0f;
 		const float half_height = rect.dimensions.y / 2.0f;
-		return { rect.position.x - half_width,
-				 rect.position.y - half_height,
-				 rect.position.x + half_width,
-				 rect.position.y + half_height };
+		return {
+			{ rect.position.x - half_width, rect.position.y - half_height, },
+			{ rect.position.x + half_width, rect.position.y + half_height  }
+		};
 	}
 
 	constexpr Rect circle_to_rect(const Circle& c)

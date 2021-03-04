@@ -11,7 +11,7 @@
 #include <memory>
 #include <unordered_map>
 
-#include <entt.hpp>
+#include <entt/entt.hpp>
 
 struct SDL_Renderer;
 struct SDL_Texture;

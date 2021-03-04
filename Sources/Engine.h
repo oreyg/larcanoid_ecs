@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include <entt.hpp>
+#include <entt/entt.hpp>
 
 class Engine final
 {
@@ -46,8 +46,7 @@ public:
 
 	void process_inputs();
 	void call_on_input(EInputEvent e, bool changed);
-	void call_construct();
-
+	
 	// SDL logic
 	void process_os_events();
 
@@ -56,6 +55,7 @@ public:
 	{
 		auto m = std::make_shared<t>(args...);
 		m_actors.push_back(m);
+		m->on_construct(m_sdl_renderer, &registry);
 		return m;
 	}
 
@@ -65,7 +65,9 @@ public:
 		if (it != std::end(m_actors))
 		{
 			m_actors.erase(it);
+			return true;
 		}
+		return false;
 	}
 
 	Engine();

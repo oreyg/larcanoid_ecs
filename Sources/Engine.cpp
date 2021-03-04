@@ -113,14 +113,6 @@ void Engine::call_on_input(EInputEvent e, bool changed)
 	}
 }
 
-void Engine::call_construct()
-{
-	for (auto& m : m_actors)
-	{
-		m->on_construct(m_sdl_renderer, &registry);
-	}
-}
-
 void Engine::process_os_events()
 {
 	SDL_Event e;
