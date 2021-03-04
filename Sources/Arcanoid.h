@@ -18,6 +18,9 @@ struct SDL_Texture;
 struct SDL_Surface;
 struct _TTF_Font;
 typedef struct _TTF_Font TTF_Font;
+struct Mix_Chunk;
+struct _Mix_Music;
+typedef struct _Mix_Music Mix_Music;
 
 enum class EGameState
 {
@@ -118,6 +121,11 @@ private:
 	SDL_Texture* m_laser_texture{};
 	SDL_Texture* m_pickup_texture{};
 
+	Mix_Chunk* m_blop_sound{};
+	Mix_Chunk* m_break_sound{};
+
+	Mix_Music* m_music{};
+
 public:
 	bool is_restart_allowed = false;
 	bool is_restart_requested = false;
@@ -156,7 +164,7 @@ public:
 	static void remove_balls(entt::registry* registry);
 	static void remove_pickups(entt::registry* registry);
 
-	static void update_balls(entt::registry* registry, entt::entity platform_entity, std::array<SDL_Texture*, ECRACKCOLOR_NUMBER>& crtextures);
+	static void update_balls(entt::registry* registry, entt::entity platform_entity, std::array<SDL_Texture*, ECRACKCOLOR_NUMBER>& crtextures, Mix_Chunk* blop_sound);
 	static void update_lifes(entt::registry* registry, PlayerState& player_state);
 	static void update_pickups(entt::registry* registry, std::shared_ptr<Scheduler> scheduler, entt::entity platform_entity, SDL_Texture* laser_texture);
 	static void update_destroys(entt::registry* registry);

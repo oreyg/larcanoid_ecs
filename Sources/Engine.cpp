@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <SDL_image.h>
+#include <SDL_mixer.h>
 
 void Engine::process()
 {
@@ -147,6 +148,19 @@ Engine::Engine()
 		return;
 	}
 
+	const int mix_flags = MIX_INIT_MP3;
+	if (Mix_Init(mix_flags)&mix_flags != mix_flags)
+	{
+		m_should_quit = true;
+		return;
+	}
+
+	if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024) == -1)
+	{
+		m_should_quit = true;
+		return;
+	}
+
 	m_start_tick = SDL_GetPerformanceCounter();
 	m_prev_tick  = m_start_tick;
 
@@ -156,6 +170,7 @@ Engine::Engine()
 
 Engine::~Engine()
 {
+	Mix_Quit();
 	TTF_Quit();
 
 	// If I had a render thread, here I would've waited for it to finish

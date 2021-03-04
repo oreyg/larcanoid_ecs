@@ -30,8 +30,9 @@ int main(int argc, char* argv[])
 {
 	Engine engine;
 
-	auto scheduler    = engine.create_actor<Scheduler>();
-	auto arcanoid     = engine.create_actor<Arcanoid>(scheduler);
+	auto scheduler = engine.create_actor<Scheduler>();
+	auto arcanoid  = engine.create_actor<Arcanoid>(scheduler);
+	auto ui_delay  = engine.create_actor<Scheduler>(false);
 
 	level1(*arcanoid);
 	EArcanoidLevel next_level = ELEVEL2;
@@ -59,8 +60,6 @@ int main(int argc, char* argv[])
 				arcanoid->is_restart_allowed = true;
 				if (arcanoid->is_restart_requested)
 				{
-					auto ui_delay = engine.create_actor<Scheduler>(false);
-
 					// Restart in 0.5 seconds 
 					arcanoid->is_restart_allowed = false;
 					arcanoid->is_waiting_for_next_level = false;
@@ -69,8 +68,6 @@ int main(int argc, char* argv[])
 						arcanoid->progress_to_next_level();
 						level1(*arcanoid);
 						next_level = ELEVEL2;
-
-						engine.release_actor(ui_delay);
 					});
 				}
 				break;

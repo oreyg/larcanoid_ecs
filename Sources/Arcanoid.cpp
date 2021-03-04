@@ -4,6 +4,7 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <SDL_image.h>
+#include <SDL_mixer.h>
 #include <random>
 
 static inline const SDL_Rect make_sdl_rect(const Rect& rect)
@@ -247,6 +248,21 @@ void Arcanoid::on_construct(SDL_Renderer* renderer, entt::registry* registry)
 		m_pickup_texture = IMG_LoadTexture(renderer, path.c_str());
 	}
 
+	{
+		const std::string path{ base_path + "Resources/sounds/blop.wav" };
+		m_blop_sound = Mix_LoadWAV(path.c_str());
+	}
+
+	{
+		const std::string path{ base_path + "Resources/sounds/music.wav" };
+		m_music = Mix_LoadMUS(path.c_str());
+	}
+
+	if (m_music)
+	{
+		Mix_PlayMusic(m_music, -1);
+	}
+	
 	// Start game
 	reset_to_start(true);
 }
@@ -262,7 +278,7 @@ void Arcanoid::on_fixed_update()
 	m_scheduler->pause(m_state != EGameState::game);
 	if (m_state == EGameState::game)
 	{
-		update_balls(m_registry, m_platform, m_crack_texture);
+		update_balls(m_registry, m_platform, m_crack_texture, m_blop_sound);
 		update_laser(m_registry);
 		update_lifes(m_registry, m_player_state);
 		update_pickups(m_registry, m_scheduler, m_platform, m_laser_texture);
@@ -332,7 +348,6 @@ void Arcanoid::on_input(EInputEvent e, bool changed)
 		Rect& platform = m_registry->get<Rect>(m_platform);
 
 		constexpr float platform_velocity = g_platform_velocity * (float) g_fixed_delta_time;
-		//const Bounds plbounds = fmath::rect_to_bounds(platform);
 		const Bounds gabounds = fmath::rect_to_bounds(m_game_area);
 		const float left_border  = gabounds.min.x + platform.dimensions.x / 2;
 		const float right_border = gabounds.max.x - platform.dimensions.x / 2;
@@ -435,7 +450,7 @@ void Arcanoid::remove_pickups(entt::registry* registry)
 	}
 }
 
-void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_entity, std::array<SDL_Texture*, ECRACKCOLOR_NUMBER>& crtextures)
+void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_entity, std::array<SDL_Texture*, ECRACKCOLOR_NUMBER>& crtextures, Mix_Chunk* blop_sound)
 {
 	Rect platform{};
 	if (registry->has<Rect>(platform_entity))
@@ -516,6 +531,12 @@ void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_enti
 				static std::default_random_engine gen(SDL_GetTicks());
 				static std::uniform_int_distribution<int> index(0, ECRACKCOLOR_NUMBER - 1);
 				sprite->texture = crtextures[index(gen)];
+			}
+
+			// Play sound
+			if (blop_sound)
+			{
+				Mix_PlayChannel(-1, blop_sound, 0);
 			}
 			
 			// One hit is 1 HP
