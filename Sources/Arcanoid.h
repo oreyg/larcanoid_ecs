@@ -5,11 +5,8 @@
 #include "Timer.h"
 
 #include <type_traits>
-#include <vector>
-#include <array>
 #include <string>
 #include <memory>
-#include <unordered_map>
 
 #include <entt/entt.hpp>
 
@@ -22,17 +19,10 @@ struct Mix_Chunk;
 struct _Mix_Music;
 typedef struct _Mix_Music Mix_Music;
 
-enum class EGameState
-{
-	game_aim,
-	game,
-	pause,
-	score
-};
-
+// Enums for resources
 enum EBlockColor
 {
-	EBLOCKCOLOR_CYAN,
+	EBLOCKCOLOR_CYAN = 0,
 	EBLOCKCOLOR_GREEN,
 	EBLOCKCOLOR_PURPLE,
 	EBLOCKCOLOR_RED,
@@ -42,7 +32,7 @@ enum EBlockColor
 
 enum ECrackColor
 {
-	ECRACKCOLOR_1,
+	ECRACKCOLOR_1 = 0,
 	ECRACKCOLOR_2,
 	ECRACKCOLOR_NUMBER
 };
@@ -52,8 +42,10 @@ enum EHitSound
 	EHITSOUND_TOUCH = 0,
 	EHITSOUND_BREAK,
 	EHITSOUND_WALLS,
-	EHITSOUND_PLATF,
+	EHITSOUND_PLATFORM,
 	EHITSOUND_BONUS,
+	EHITSOUND_GROUND,
+	EHITSOUND_FAILURE,
 	EHITSOUND_NUMBER
 };
 
@@ -63,6 +55,14 @@ enum class EPickupType
 	platform_enlarge,
 	laser,
 	number
+};
+
+enum class EGameState
+{
+	game_aim,
+	game,
+	pause,
+	score
 };
 
 struct PlayerState
@@ -86,6 +86,7 @@ struct Movable
 struct Sprite
 {
 	SDL_Texture* texture{ nullptr };
+	float        alpha{ 1.0f };
 };
 
 struct Pickup
@@ -99,10 +100,31 @@ struct Platform {};
 struct Ball {};
 struct Destroy {};
 struct Laser {};
+
 struct Attach 
 {
 	entt::entity parent;
 	Vector2      offset;
+};
+
+struct Resources
+{
+	// Resources
+	TTF_Font*    ttf_font{ nullptr };
+	SDL_Texture* tex_block[EBLOCKCOLOR_NUMBER]{};
+	SDL_Texture* tex_crack[ECRACKCOLOR_NUMBER]{};
+
+	SDL_Texture* tex_ball{};
+	SDL_Texture* tex_platform{};
+	SDL_Texture* tex_laser{};
+	SDL_Texture* tex_pickup{};
+
+	Mix_Chunk* mix_hit[EHITSOUND_NUMBER]{};
+	Mix_Chunk* mix_laser_on{};
+
+	Mix_Music* music{};
+
+	void construct(SDL_Renderer* renderer, entt::registry* registry);
 };
 
 class Arcanoid final : public Actor
@@ -110,10 +132,10 @@ class Arcanoid final : public Actor
 private:
 	std::shared_ptr<Scheduler> m_scheduler;
 
-	static constexpr Rect   m_game_area{ g_game_center_s, g_game_area_s };
-	static constexpr Bounds m_game_bounds = fmath::rect_to_bounds(m_game_area);
+	static constexpr Rect   m_game_area  { g_game_center_s, g_game_area_s     };
+	static constexpr Bounds m_game_bounds{ fmath::rect_to_bounds(m_game_area) };
 
-	EGameState   m_state;
+	EGameState   m_state{ EGameState::game_aim };
 	PlayerState  m_player_state;
 
 	entt::registry* m_registry{ nullptr };
@@ -121,20 +143,7 @@ private:
 	entt::entity m_platform{ entt::null };
 	entt::entity m_aim_ball{ entt::null };
 
-	// Resources
-	TTF_Font* m_font{ nullptr };
-	std::array<SDL_Texture*, EBLOCKCOLOR_NUMBER> m_block_texture{};
-	std::array<SDL_Texture*, ECRACKCOLOR_NUMBER> m_crack_texture{};
-
-	SDL_Texture* m_ball_texture{};
-	SDL_Texture* m_platform_texture{};
-	SDL_Texture* m_laser_texture{};
-	SDL_Texture* m_pickup_texture{};
-
-	std::array<Mix_Chunk*, EHITSOUND_NUMBER> m_hitsound{};
-	Mix_Chunk* m_laser_sound{};
-
-	Mix_Music* m_music{};
+	Resources res;
 
 public:
 	bool is_restart_allowed = false;
@@ -174,9 +183,9 @@ public:
 	static void remove_balls(entt::registry* registry);
 	static void remove_pickups(entt::registry* registry);
 
-	static void update_balls(entt::registry* registry, entt::entity platform_entity, SDL_Texture** textures, Mix_Chunk** sounds);
+	static void update_balls(entt::registry* registry, entt::entity platform_entity, Resources& res);
 	static void update_lifes(entt::registry* registry, PlayerState& player_state);
-	static void update_pickups(entt::registry* registry, std::shared_ptr<Scheduler> scheduler, entt::entity platform_entity, SDL_Texture* laser_texture);
+	static void update_pickups(entt::registry* registry, std::shared_ptr<Scheduler> scheduler, entt::entity platform_entity, Resources& res);
 	static void update_destroys(entt::registry* registry);
 	static void update_movable(entt::registry* registry);
 	static void update_laser(entt::registry* registry);

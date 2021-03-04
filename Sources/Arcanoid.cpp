@@ -23,6 +23,87 @@ static inline const SDL_Rect make_sdl_rect(const Circle& rect)
 			 (int)rect.radius * 2 };
 }
 
+void Resources::construct(SDL_Renderer* renderer, entt::registry* registry)
+{
+	// Load resources
+	char* base_path_cstr = SDL_GetBasePath();
+	const std::string base_path{ base_path_cstr };
+	SDL_free(base_path_cstr);
+
+	constexpr std::string_view block_paths[EBLOCKCOLOR_NUMBER]{
+	"Resources/images/soft_block_cyan.png",
+	"Resources/images/soft_block_green.png",
+	"Resources/images/soft_block_purple.png",
+	"Resources/images/soft_block_red.png",
+	"Resources/images/soft_block_yellow.png",
+	};
+
+	constexpr std::string_view crack_paths[ECRACKCOLOR_NUMBER]{
+		"Resources/images/hard_block_cr1.png",
+		"Resources/images/hard_block_cr2.png"
+	};
+
+	for (size_t i = 0; i < EBLOCKCOLOR_NUMBER; ++i)
+	{
+		const std::string path{ base_path + block_paths[i].data() };
+		tex_block[i] = IMG_LoadTexture(renderer, path.c_str());
+	}
+
+	for (size_t i = 0; i < ECRACKCOLOR_NUMBER; ++i)
+	{
+		const std::string path{ base_path + crack_paths[i].data() };
+		tex_crack[i] = IMG_LoadTexture(renderer, path.c_str());
+	}
+
+	ttf_font = TTF_OpenFont("Resources/fonts/Roboto-Regular.ttf", 12);
+
+	{
+		const std::string path{ base_path + "Resources/images/ball.png" };
+		tex_ball = IMG_LoadTexture(renderer, path.c_str());
+	}
+
+	{
+		const std::string path{ base_path + "Resources/images/platform.png" };
+		tex_platform = IMG_LoadTexture(renderer, path.c_str());
+	}
+
+	{
+		const std::string path{ base_path + "Resources/images/laser.png" };
+		tex_laser = IMG_LoadTexture(renderer, path.c_str());
+	}
+
+	{
+		const std::string path{ base_path + "Resources/images/pickup.png" };
+		tex_pickup = IMG_LoadTexture(renderer, path.c_str());
+	}
+
+	constexpr std::string_view hitsound_paths[EHITSOUND_NUMBER]{
+		"Resources/sounds/hit_touch.wav",
+		"Resources/sounds/hit_break.wav",
+		"Resources/sounds/hit_walls.wav",
+		"Resources/sounds/hit_platf.wav",
+		"Resources/sounds/hit_bonus.wav",
+		"Resources/sounds/hit_ground.wav",
+		"Resources/sounds/hit_failure.wav",
+	};
+
+	for (size_t i = 0; i < EHITSOUND_NUMBER; ++i)
+	{
+		const std::string path{ base_path + hitsound_paths[i].data() };
+		mix_hit[i] = Mix_LoadWAV(path.c_str());
+	}
+
+	{
+		const std::string path{ base_path + "Resources/sounds/laser_on.wav" };
+		mix_laser_on = Mix_LoadWAV(path.c_str());
+	}
+
+	{
+		const std::string path{ base_path + "Resources/sounds/music.wav" };
+		music = Mix_LoadMUS(path.c_str());
+	}
+}
+
 void Arcanoid::spawn_block_grid(Vector2 offset, uint32_t cols, uint32_t rows, Vector2 block_dims, Vector2 block_offset, float HP)
 {
 	// Random generators for block color
@@ -42,7 +123,7 @@ void Arcanoid::spawn_block_grid(Vector2 offset, uint32_t cols, uint32_t rows, Ve
 				entt::entity entity = m_registry->create();
 				m_registry->emplace<Rect>(entity, position, block_dims);
 				m_registry->emplace<Block>(entity);
-				m_registry->emplace<Sprite>(entity, m_block_texture[index(gen)]);
+				m_registry->emplace<Sprite>(entity, res.tex_block[index(gen)]);
 				m_registry->emplace<Life>(entity, HP);
 				m_registry->emplace<Collider>(entity);
 			}
@@ -111,7 +192,7 @@ entt::entity Arcanoid::spawn_laser(entt::registry* registry, entt::entity platfo
 
 void Arcanoid::spawn_random_pickup()
 {
-	spawn_pickup(m_registry, m_pickup_texture);
+	spawn_pickup(m_registry, res.tex_pickup);
 	m_scheduler->schedule(5, std::bind(&Arcanoid::spawn_random_pickup, this));
 }
 
@@ -137,7 +218,7 @@ void Arcanoid::reset_to_start(bool full)
 
 	if (m_registry->size<Platform>() == 0)
 	{
-		m_platform = spawn_platform(m_registry, m_platform_texture);
+		m_platform = spawn_platform(m_registry, res.tex_platform);
 	}
 	else
 	{
@@ -152,7 +233,7 @@ void Arcanoid::reset_to_start(bool full)
 	const float platform_top = g_game_area_s.y - g_platform_elevation - g_platform_dimensions.y / 2;
 	const Vector2 ball_position{ g_game_center_s.x,  platform_top - g_ball_radius - 5 * g_scale };
 
-	m_aim_ball = spawn_ball(m_registry, ball_position, { 0, -g_ball_start_velocity }, m_ball_texture);
+	m_aim_ball = spawn_ball(m_registry, ball_position, { 0, -g_ball_start_velocity }, res.tex_ball);
 	m_state = EGameState::game_aim;
 }
 
@@ -168,6 +249,11 @@ void Arcanoid::check_win_conditions()
 		}
 		else
 		{
+			if (!is_waiting_for_next_level)
+			{
+				Mix_PlayChannel(-1, res.mix_hit[EHITSOUND_FAILURE], 0);
+			}
+
 			is_waiting_for_restart    = true;
 			is_waiting_for_next_level = true;
 			m_state = EGameState::score;
@@ -197,94 +283,19 @@ void Arcanoid::on_construct(SDL_Renderer* renderer, entt::registry* registry)
 	m_registry = registry;
 
 	// Load resources
-	char* base_path_cstr = SDL_GetBasePath();
-	const std::string base_path{ base_path_cstr };
-	SDL_free(base_path_cstr);
+	res.construct(renderer, registry);
 
-	constexpr std::string_view block_paths[EBLOCKCOLOR_NUMBER] {
-		"Resources/images/soft_block_cyan.png",
-		"Resources/images/soft_block_green.png",
-		"Resources/images/soft_block_purple.png",
-		"Resources/images/soft_block_red.png",
-		"Resources/images/soft_block_yellow.png",
-	};
-
-	constexpr std::string_view crack_paths[ECRACKCOLOR_NUMBER] {
-		"Resources/images/hard_block_cr1.png",
-		"Resources/images/hard_block_cr2.png"
-	};
-
-	for (size_t i = 0; i < EBLOCKCOLOR_NUMBER; ++i)
+	if (res.music)
 	{
-		const std::string path{ base_path + block_paths[i].data() };
-		m_block_texture[i] = IMG_LoadTexture(renderer, path.c_str());
+		Mix_PlayMusic(res.music, -1);
 	}
 
-	for (size_t i = 0; i < ECRACKCOLOR_NUMBER; ++i)
-	{
-		const std::string path{ base_path + crack_paths[i].data() };
-		m_crack_texture[i] = IMG_LoadTexture(renderer, path.c_str());
-	}
-
-	m_font = TTF_OpenFont("Resources/fonts/Roboto-Regular.ttf", 12);
-
-	{
-		const std::string path{ base_path + "Resources/images/ball.png" };
-		m_ball_texture = IMG_LoadTexture(renderer, path.c_str());
-	}
-
-	{
-		const std::string path{ base_path + "Resources/images/platform.png" };
-		m_platform_texture = IMG_LoadTexture(renderer, path.c_str());
-	}
-
-	{
-		const std::string path{ base_path + "Resources/images/laser.png" };
-		m_laser_texture = IMG_LoadTexture(renderer, path.c_str());
-	}
-
-	{
-		const std::string path{ base_path + "Resources/images/pickup.png" };
-		m_pickup_texture = IMG_LoadTexture(renderer, path.c_str());
-	}
-
-	constexpr std::string_view hitsound_paths[EHITSOUND_NUMBER]{
-		"Resources/sounds/hit_touch.wav",
-		"Resources/sounds/hit_break.wav",
-		"Resources/sounds/hit_walls.wav",
-		"Resources/sounds/hit_platf.wav",
-		"Resources/sounds/hit_bonus.wav",
-	};
-
-	for (size_t i = 0; i < EHITSOUND_NUMBER; ++i)
-	{
-		const std::string path{ base_path + hitsound_paths[i].data() };
-		m_hitsound[i] = Mix_LoadWAV(path.c_str());
-	}
-
-	{
-		const std::string path{ base_path + "Resources/sounds/laser.wav" };
-		m_laser_sound = Mix_LoadWAV(path.c_str());
-	}
-
-	{
-		const std::string path{ base_path + "Resources/sounds/music.wav" };
-		m_music = Mix_LoadMUS(path.c_str());
-	}
-
-	if (m_music)
-	{
-		Mix_PlayMusic(m_music, -1);
-	}
-	
 	// Start game
 	reset_to_start(true);
 }
 
 void Arcanoid::on_update(float delta_time)
 {
-	// In regular game we want to have everything in regular update,
-	// but this game is too simple for this
 }
 
 void Arcanoid::on_fixed_update()
@@ -292,10 +303,10 @@ void Arcanoid::on_fixed_update()
 	m_scheduler->pause(m_state != EGameState::game);
 	if (m_state == EGameState::game)
 	{
-		update_balls(m_registry, m_platform, m_crack_texture.data(), m_hitsound.data());
+		update_balls(m_registry, m_platform, res);
 		update_laser(m_registry);
 		update_lifes(m_registry, m_player_state);
-		update_pickups(m_registry, m_scheduler, m_platform, m_laser_texture);
+		update_pickups(m_registry, m_scheduler, m_platform, res);
 		update_movable(m_registry);
 		update_attach(m_registry);
 		update_destroys(m_registry);
@@ -309,15 +320,15 @@ void Arcanoid::on_render(SDL_Renderer* renderer)
 	switch (m_state)
 	{
 	case EGameState::game_aim:
-		render_space_hint(renderer, m_font);
+		render_space_hint(renderer, res.ttf_font);
 		[[fallthrough]];
 	case EGameState::game:
 	case EGameState::pause:
 		render_sprites(m_registry, renderer);
-		render_player_state(renderer, m_font, m_player_state);
+		render_player_state(renderer, res.ttf_font, m_player_state);
 		break;
 	case EGameState::score:
-		render_final_score(renderer, m_font, m_player_state);
+		render_final_score(renderer, res.ttf_font, m_player_state);
 		break;
 	}
 }
@@ -464,7 +475,7 @@ void Arcanoid::remove_pickups(entt::registry* registry)
 	}
 }
 
-void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_entity, SDL_Texture** crack_textures, Mix_Chunk** hit_sounds)
+void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_entity, Resources& res)
 {
 	Rect platform{};
 	if (registry->has<Rect>(platform_entity))
@@ -484,11 +495,12 @@ void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_enti
 		// Check the ball against the walls
 		if (ball_nf.position.y < m_game_bounds.min.y)
 		{
-			Mix_PlayChannel(-1, hit_sounds[EHITSOUND_WALLS], 0);
+			Mix_PlayChannel(-1, res.mix_hit[EHITSOUND_WALLS], 0);
 			ball_mov.velocity.y *= -1;
 		}
 		if (ball_nf.position.y > m_game_bounds.max.y || isnan(ball_nf.position.x) || isnan(ball_nf.position.y))
 		{
+			Mix_PlayChannel(-1, res.mix_hit[EHITSOUND_GROUND], 0);
 			// Mark for destruction and continue with next ball
 			registry->emplace<Destroy>(entity);
 			continue;
@@ -496,7 +508,7 @@ void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_enti
 
 		if (ball_nf.position.x < m_game_bounds.min.x || ball_nf.position.x > m_game_bounds.max.x)
 		{
-			Mix_PlayChannel(-1, hit_sounds[EHITSOUND_WALLS], 0);
+			Mix_PlayChannel(-1, res.mix_hit[EHITSOUND_WALLS], 0);
 			ball_mov.velocity.x *= -1;
 		}
 
@@ -546,7 +558,7 @@ void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_enti
 			{
 				static std::default_random_engine gen(SDL_GetTicks());
 				static std::uniform_int_distribution<int> index(0, ECRACKCOLOR_NUMBER - 1);
-				sprite->texture = crack_textures[index(gen)];
+				sprite->texture = res.tex_crack[index(gen)];
 			}
 			
 			// One hit is 1 HP
@@ -555,18 +567,18 @@ void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_enti
 			// Play sound
 			if (block_life.life > 0)
 			{
-				Mix_PlayChannel(-1, hit_sounds[EHITSOUND_TOUCH], 0);
+				Mix_PlayChannel(-1, res.mix_hit[EHITSOUND_TOUCH], 0);
 			}
 			else
 			{
-				Mix_PlayChannel(-1, hit_sounds[EHITSOUND_BREAK], 0);
+				Mix_PlayChannel(-1, res.mix_hit[EHITSOUND_BREAK], 0);
 			}
 			break;
 		}
 
 		if (fmath::has_intersection(ball_nf, platform))
 		{
-			Mix_PlayChannel(-1, hit_sounds[EHITSOUND_PLATF], 0);
+			Mix_PlayChannel(-1, res.mix_hit[EHITSOUND_PLATFORM], 0);
 			constexpr float platform_range = 100.0f * fmath::conv_to_rad / 2.0f;
 			const float delta_x = platform.position.x - ball.position.x;
 			ball_mov.velocity = fmath::proj_to_hemi(platform_range, delta_x, platform.dimensions.x) * g_ball_start_velocity;
@@ -588,7 +600,7 @@ void Arcanoid::update_lifes(entt::registry* registry, PlayerState& player_state)
 	}
 }
 
-void Arcanoid::update_pickups(entt::registry* registry, std::shared_ptr<Scheduler> scheduler, entt::entity platform_entity, SDL_Texture* laser_texture)
+void Arcanoid::update_pickups(entt::registry* registry, std::shared_ptr<Scheduler> scheduler, entt::entity platform_entity, Resources& res)
 {
 	Rect& platform = registry->get<Rect>(platform_entity);
 
@@ -607,17 +619,21 @@ void Arcanoid::update_pickups(entt::registry* registry, std::shared_ptr<Schedule
 			switch (pickup.type)
 			{
 			case EPickupType::platform_enlarge:
-				platform.dimensions = { platform.dimensions.x + 30, platform.dimensions.y };
-				scheduler->schedule(5, [registry, platform_entity]() {
-					if (registry->valid(platform_entity))
-					{
-						Rect& platform = registry->get<Rect>(platform_entity);
-						platform.dimensions = { platform.dimensions.x - 30, platform.dimensions.y };
-					}
-				});
+				{
+					Mix_PlayChannel(-1, res.mix_hit[EHITSOUND_BONUS], 0);
+					platform.dimensions = { platform.dimensions.x + 30, platform.dimensions.y };
+					scheduler->schedule(5, [registry, platform_entity]() {
+						if (registry->valid(platform_entity))
+						{
+							Rect& platform = registry->get<Rect>(platform_entity);
+							platform.dimensions = { platform.dimensions.x - 30, platform.dimensions.y };
+						}
+					});
+				}
 				break;
 			case EPickupType::triplet:
 				{
+					Mix_PlayChannel(-1, res.mix_hit[EHITSOUND_BONUS], 0);
 					auto ball_view = registry->view<Ball, Circle, Sprite, Movable>();
 					for (auto [entity, circle, sprite, movable] : ball_view.each())
 					{
@@ -630,7 +646,8 @@ void Arcanoid::update_pickups(entt::registry* registry, std::shared_ptr<Schedule
 				break;
 			case EPickupType::laser:
 				{
-					entt::entity laser_entity = spawn_laser(registry, platform_entity, laser_texture);
+					Mix_PlayChannel(-1, res.mix_laser_on, 0);
+					entt::entity laser_entity = spawn_laser(registry, platform_entity, res.tex_laser);
 					scheduler->schedule(3, [registry, laser_entity]() {
 						if (registry->valid(laser_entity))
 						{
@@ -723,13 +740,15 @@ void Arcanoid::render_sprites(entt::registry* registry, SDL_Renderer* renderer)
 			continue;
 		}
 
+		const uint8_t alpha = (uint8_t)sprite.alpha * 255;
 		if (sprite.texture == nullptr)
 		{
-			SDL_SetRenderDrawColor(renderer, 244, 244, 244, 244);
+			SDL_SetRenderDrawColor(renderer, 244, 244, 244, alpha);
 			SDL_RenderFillRect(renderer, &sdlrect);
 		}
 		else
 		{
+			SDL_SetTextureAlphaMod(sprite.texture, alpha);
 			SDL_RenderCopy(renderer, sprite.texture, nullptr, &sdlrect);
 		}
 	}
