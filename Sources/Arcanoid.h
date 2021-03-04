@@ -47,6 +47,16 @@ enum ECrackColor
 	ECRACKCOLOR_NUMBER
 };
 
+enum EHitSound
+{
+	EHITSOUND_TOUCH = 0,
+	EHITSOUND_BREAK,
+	EHITSOUND_WALLS,
+	EHITSOUND_PLATF,
+	EHITSOUND_BONUS,
+	EHITSOUND_NUMBER
+};
+
 enum class EPickupType
 {
 	triplet = 0,
@@ -121,8 +131,8 @@ private:
 	SDL_Texture* m_laser_texture{};
 	SDL_Texture* m_pickup_texture{};
 
-	Mix_Chunk* m_blop_sound{};
-	Mix_Chunk* m_break_sound{};
+	std::array<Mix_Chunk*, EHITSOUND_NUMBER> m_hitsound{};
+	Mix_Chunk* m_laser_sound{};
 
 	Mix_Music* m_music{};
 
@@ -164,7 +174,7 @@ public:
 	static void remove_balls(entt::registry* registry);
 	static void remove_pickups(entt::registry* registry);
 
-	static void update_balls(entt::registry* registry, entt::entity platform_entity, std::array<SDL_Texture*, ECRACKCOLOR_NUMBER>& crtextures, Mix_Chunk* blop_sound);
+	static void update_balls(entt::registry* registry, entt::entity platform_entity, SDL_Texture** textures, Mix_Chunk** sounds);
 	static void update_lifes(entt::registry* registry, PlayerState& player_state);
 	static void update_pickups(entt::registry* registry, std::shared_ptr<Scheduler> scheduler, entt::entity platform_entity, SDL_Texture* laser_texture);
 	static void update_destroys(entt::registry* registry);

@@ -248,9 +248,23 @@ void Arcanoid::on_construct(SDL_Renderer* renderer, entt::registry* registry)
 		m_pickup_texture = IMG_LoadTexture(renderer, path.c_str());
 	}
 
+	constexpr std::string_view hitsound_paths[EHITSOUND_NUMBER]{
+		"Resources/sounds/hit_touch.wav",
+		"Resources/sounds/hit_break.wav",
+		"Resources/sounds/hit_walls.wav",
+		"Resources/sounds/hit_platf.wav",
+		"Resources/sounds/hit_bonus.wav",
+	};
+
+	for (size_t i = 0; i < EHITSOUND_NUMBER; ++i)
 	{
-		const std::string path{ base_path + "Resources/sounds/blop.wav" };
-		m_blop_sound = Mix_LoadWAV(path.c_str());
+		const std::string path{ base_path + hitsound_paths[i].data() };
+		m_hitsound[i] = Mix_LoadWAV(path.c_str());
+	}
+
+	{
+		const std::string path{ base_path + "Resources/sounds/laser.wav" };
+		m_laser_sound = Mix_LoadWAV(path.c_str());
 	}
 
 	{
@@ -278,7 +292,7 @@ void Arcanoid::on_fixed_update()
 	m_scheduler->pause(m_state != EGameState::game);
 	if (m_state == EGameState::game)
 	{
-		update_balls(m_registry, m_platform, m_crack_texture, m_blop_sound);
+		update_balls(m_registry, m_platform, m_crack_texture.data(), m_hitsound.data());
 		update_laser(m_registry);
 		update_lifes(m_registry, m_player_state);
 		update_pickups(m_registry, m_scheduler, m_platform, m_laser_texture);
@@ -450,7 +464,7 @@ void Arcanoid::remove_pickups(entt::registry* registry)
 	}
 }
 
-void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_entity, std::array<SDL_Texture*, ECRACKCOLOR_NUMBER>& crtextures, Mix_Chunk* blop_sound)
+void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_entity, SDL_Texture** crack_textures, Mix_Chunk** hit_sounds)
 {
 	Rect platform{};
 	if (registry->has<Rect>(platform_entity))
@@ -470,6 +484,7 @@ void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_enti
 		// Check the ball against the walls
 		if (ball_nf.position.y < m_game_bounds.min.y)
 		{
+			Mix_PlayChannel(-1, hit_sounds[EHITSOUND_WALLS], 0);
 			ball_mov.velocity.y *= -1;
 		}
 		if (ball_nf.position.y > m_game_bounds.max.y || isnan(ball_nf.position.x) || isnan(ball_nf.position.y))
@@ -481,6 +496,7 @@ void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_enti
 
 		if (ball_nf.position.x < m_game_bounds.min.x || ball_nf.position.x > m_game_bounds.max.x)
 		{
+			Mix_PlayChannel(-1, hit_sounds[EHITSOUND_WALLS], 0);
 			ball_mov.velocity.x *= -1;
 		}
 
@@ -530,22 +546,27 @@ void Arcanoid::update_balls(entt::registry* registry, entt::entity platform_enti
 			{
 				static std::default_random_engine gen(SDL_GetTicks());
 				static std::uniform_int_distribution<int> index(0, ECRACKCOLOR_NUMBER - 1);
-				sprite->texture = crtextures[index(gen)];
-			}
-
-			// Play sound
-			if (blop_sound)
-			{
-				Mix_PlayChannel(-1, blop_sound, 0);
+				sprite->texture = crack_textures[index(gen)];
 			}
 			
 			// One hit is 1 HP
 			block_life.life -= 1;
+
+			// Play sound
+			if (block_life.life > 0)
+			{
+				Mix_PlayChannel(-1, hit_sounds[EHITSOUND_TOUCH], 0);
+			}
+			else
+			{
+				Mix_PlayChannel(-1, hit_sounds[EHITSOUND_BREAK], 0);
+			}
 			break;
 		}
 
 		if (fmath::has_intersection(ball_nf, platform))
 		{
+			Mix_PlayChannel(-1, hit_sounds[EHITSOUND_PLATF], 0);
 			constexpr float platform_range = 100.0f * fmath::conv_to_rad / 2.0f;
 			const float delta_x = platform.position.x - ball.position.x;
 			ball_mov.velocity = fmath::proj_to_hemi(platform_range, delta_x, platform.dimensions.x) * g_ball_start_velocity;
