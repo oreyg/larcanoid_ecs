@@ -148,7 +148,7 @@ Engine::Engine()
 		return;
 	}
 
-	const int mix_flags = MIX_INIT_MP3;
+	const int mix_flags = 0;
 	if ((Mix_Init(mix_flags) & mix_flags) != mix_flags)
 	{
 		m_should_quit = true;
